@@ -9,13 +9,22 @@ public class GravitateToTargetSystem : JobComponentSystem
 {
     JobHandle _jobHandle;
     EntityManager _entityManager;
+    float _explosionMultiplier;
+    float _distanceExplosion = 100;
 
     protected override void OnCreate()
     {
         base.OnCreate();
         Debug.Log("Created GravitateToTargetSystem");
         _entityManager = World.Active.EntityManager;
+        _explosionMultiplier = 20;
         Enabled = false;
+    }
+
+    public void SetExplosionMultiplier(float multiplier, float distanceExplosion)
+    {
+        _explosionMultiplier = multiplier;
+        _distanceExplosion = distanceExplosion;
     }
 
     protected override JobHandle OnUpdate(JobHandle inputDeps)
@@ -32,7 +41,7 @@ public class GravitateToTargetSystem : JobComponentSystem
         if (Input.GetMouseButtonDown(1))
         {
             var screenPoint = Input.mousePosition;
-            screenPoint.z = 75.0f; //distance of the plane from the camera
+            screenPoint.z = _distanceExplosion; //distance of the plane from the camera
             var posVector = Camera.main.ScreenToWorldPoint(screenPoint);
             var pos = new float3(posVector.x,posVector.y, posVector.z);
 
@@ -50,7 +59,7 @@ public class GravitateToTargetSystem : JobComponentSystem
                 if (distance > 40)
                     continue;
 
-                var linearVelocity = math.normalize(translations[i].Value - pos) * distance * 10.0f;
+                var linearVelocity = math.normalize(translations[i].Value - pos) * distance * _explosionMultiplier;
                 physicsVelocity.Linear = linearVelocity;
                 _entityManager.SetComponentData(entities[i], physicsVelocity);
             }
@@ -74,7 +83,7 @@ public class GravitateToTargetSystem : JobComponentSystem
                 var posComps = response.ToComponentDataArray<PositionComponent>(Unity.Collections.Allocator.TempJob);
 
                 var screenPoint = Input.mousePosition;
-                screenPoint.z = 75.0f; //distance of the plane from the camera
+                screenPoint.z = 100.0f; //distance of the plane from the camera
                 var pos = Camera.main.ScreenToWorldPoint(screenPoint);
 
                 for (int i = 0; i < posComps.Length; i++)

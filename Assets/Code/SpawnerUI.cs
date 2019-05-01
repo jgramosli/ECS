@@ -14,7 +14,7 @@ public class SpawnerUI : MonoBehaviour
     public void SpawnMore ()
     {
         _spawner.count = 100;
-        _spawner.SpawnViaPrebuiltGameObjects(2);
+        _spawner.Spawn();
     }
 
     // Start is called before the first frame update
@@ -28,6 +28,8 @@ public class SpawnerUI : MonoBehaviour
         resetButton.onClick.AddListener(ResetPositions);
         skinPhysicsButton.onClick.AddListener(SpawnSkinPhysics);
         skinLerpButton.onClick.AddListener(SpawnSkinLerp);
+
+        _spawner.SetLightDirection();
 
         character.SetActive(false);
     }
@@ -60,7 +62,7 @@ public class SpawnerUI : MonoBehaviour
     void Clear()
     {
         ECSHelper.EnableSystem<LerpPositionSystem>(false);
-        ECSHelper.EnableSystem<GravitateToTargetSystem>(true);
+        ECSHelper.EnableSystem<GravitateToTargetSystem>(false);
         character.SetActive(false);
 
         EnableButtons();

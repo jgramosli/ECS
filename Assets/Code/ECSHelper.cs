@@ -11,8 +11,8 @@ namespace Assets.Code
     {
         public static void EnableSystem<T>(bool enabled) where T : ComponentSystemBase
         {
-            var lerpSystem = World.Active.GetOrCreateSystem<T>();
-            lerpSystem.Enabled = enabled;
+            var system = World.Active.GetOrCreateSystem<T>();
+            system.Enabled = enabled;
         }
     }
 }

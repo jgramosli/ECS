@@ -31,6 +31,7 @@ public class Spawner : UnityEngine.MonoBehaviour
 
     TransformAccessArray _goTransforms;
     Unity.Mathematics.Random _rand;
+    float _defaultSize = 3f, _skinSize = 0.5f;
 
     public void Start()
     {
@@ -44,9 +45,7 @@ public class Spawner : UnityEngine.MonoBehaviour
 
         //_entityManager.AddComponentData(butterFlyEntity, PhysicsStep.Default);//new PhysicsStep() { SimulationType = SimulationType.UnityPhysics, Gravity = 0.6f, SolverIterationCount = 2, ThreadCountHint = 16 });
 
-        //SpawnViaArcheTypesAndConstruct();
-
-        SpawnViaPrebuiltGameObjects(2);
+        Spawn();
 
         Debug.Log("Finished created " + count + " entities" +"\nLogs:\n" + _logs.ToString());
     }
@@ -54,6 +53,8 @@ public class Spawner : UnityEngine.MonoBehaviour
     public void SpawnViaPrebuiltGameObjects(float scale, bool removePhysics = false)
     {
         var gameObject = Resources.Load<UnityEngine.GameObject>("ConvertGOToEntity");
+        gameObject.transform.localScale = new Vector3(scale,scale,scale);
+
         Entity sourceEntity = GameObjectConversionUtility.ConvertGameObjectHierarchy(gameObject, _initialWorld);
 
         for (int i = 0; i < count; i++)
@@ -65,9 +66,9 @@ public class Spawner : UnityEngine.MonoBehaviour
             _entityManager.AddComponentData(entity, new PositionComponent { position = pos, origionalPosition = pos });
             _entityManager.SetComponentData(entity, new Translation { Value = pos }); //Too many in the center breaks things. new float3(100,50,-25) }); //Spawn them in the center
 
-            var localScale = _entityManager.GetComponentData<NonUniformScale>(entity);
-            localScale.Value = new float3(scale, scale, scale);
-            _entityManager.SetComponentData(entity, localScale);
+            //var localScale = _entityManager.GetComponentData<NonUniformScale>(entity);
+            //localScale.Value = new float3(scale, scale, scale);
+            //_entityManager.SetComponentData(entity, localScale);
 
             if (removePhysics)
             {
@@ -77,6 +78,23 @@ public class Spawner : UnityEngine.MonoBehaviour
 
             _logs.AppendLine("Set position component to 0," + i + ",0");
         }
+    }
+
+    public void Spawn()
+    {
+        var gravitateToTargetSystem = World.Active.GetOrCreateSystem<GravitateToTargetSystem>();
+        gravitateToTargetSystem.SetExplosionMultiplier(200,100);
+
+        //SpawnViaArcheTypesAndConstruct();
+
+        SpawnViaPrebuiltGameObjects(_defaultSize);
+    }
+
+    public void SetLightDirection()
+    {
+        var light = GameObject.Find("Directional Light");
+        light.transform.position = Camera.main.transform.position;
+        light.transform.rotation = Quaternion.Euler(Vector3.right * 120);
     }
 
     public void Clear()
@@ -90,7 +108,8 @@ public class Spawner : UnityEngine.MonoBehaviour
 
         Camera.main.transform.position = cameraTransform.position;
         Camera.main.transform.rotation = cameraTransform.rotation;
-
+        
+        SetLightDirection();
         counter = 0;
         count = 100;
     }
@@ -99,18 +118,21 @@ public class Spawner : UnityEngine.MonoBehaviour
     {
         Clear();
         var verticesCopysystem = World.Active.GetOrCreateSystem<VerticesCopySystem>();
-        verticesCopysystem.SetVertices(SkinToDrawWithItems);
+        verticesCopysystem.SetVertices(SkinToDrawWithItems,UnityEngine.Animations.Axis.None,0);
         verticesCopysystem.Enabled = true;
-
         count = verticesCopysystem.GetPointsCount();
 
+        var gravitateToTargetSystem = World.Active.GetOrCreateSystem<GravitateToTargetSystem>();
+        gravitateToTargetSystem.SetExplosionMultiplier(50, 75);
+
         if (useLerp)
-            SpawnViaPrebuiltGameObjects(0.5f, true);
+            SpawnViaPrebuiltGameObjects(_skinSize, true);
         else
-            SpawnViaPrebuiltGameObjects(0.5f);
+            SpawnViaPrebuiltGameObjects(_skinSize);
 
         Camera.main.transform.position = cameraTransformSkinned.position;
         Camera.main.transform.rotation = cameraTransformSkinned.rotation;
+        SetLightDirection();
 
         ECSHelper.EnableSystem<PositionWiggleSystem>(false);
         ECSHelper.EnableSystem<LerpPositionSystem>(useLerp);
