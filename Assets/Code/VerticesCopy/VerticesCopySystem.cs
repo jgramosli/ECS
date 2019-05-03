@@ -14,7 +14,7 @@ namespace Assets.Code.VerticesCopy
         
         JobHandle _jobHandle;
         SkinnedMeshRenderer _skinnedMeshRenderer;
-        int skipCount = 1; //How many vertices we skip when creating the 
+        int skipCount = 2; //How many vertices we skip when creating the 
         Axis _axisToTwistOn;
         float _twistAmount;
 

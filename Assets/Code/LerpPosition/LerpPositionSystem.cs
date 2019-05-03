@@ -30,7 +30,7 @@ namespace Assets.Code
                 return _jobHandle;
             }
 
-            var newJob = new LerpPositionJob(0.1f);
+            var newJob = new LerpPositionJob(0.2f);
 
             _jobHandle = newJob.Schedule(this, inputDeps);
 

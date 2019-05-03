@@ -20,6 +20,9 @@ public class Spawner : UnityEngine.MonoBehaviour
     public UnityEngine.Mesh FloorMesh;
     public UnityEngine.Material FloorMaterial;
     public UnityEngine.Mesh MeshToDrawWithItems;
+    public GameObject[] ECSItemsToSpawn;
+    public GameObject[] hitsLarge;
+    public GameObject[] hitsSmall;
     public UnityEngine.SkinnedMeshRenderer SkinToDrawWithItems;
     public Transform cameraTransform, cameraTransformSkinned;
     public int counter = 0;
@@ -28,47 +31,61 @@ public class Spawner : UnityEngine.MonoBehaviour
     StringBuilder _logs = new StringBuilder();
     EntityManager _entityManager;
     World _initialWorld;
-
+    GravitateToTargetSystem _gravSystem;
+    bool zoomedForVertices = false;
     TransformAccessArray _goTransforms;
     Unity.Mathematics.Random _rand;
-    float _defaultSize = 3f, _skinSize = 0.5f;
+
+    public float DefaultScale = 3f, SkinRendererScale = 0.75f;
 
     public void Start()
     {
         _entityManager = World.Active.EntityManager;
+        _gravSystem = World.Active.GetOrCreateSystem<GravitateToTargetSystem>();
+        _gravSystem.TargetHit += t => TargetHit(t);
         _initialWorld = World.Active;
 
         _rand = new Unity.Mathematics.Random();
         _rand.InitState();
-
         SetupWorld();
 
         //_entityManager.AddComponentData(butterFlyEntity, PhysicsStep.Default);//new PhysicsStep() { SimulationType = SimulationType.UnityPhysics, Gravity = 0.6f, SolverIterationCount = 2, ThreadCountHint = 16 });
 
-        Spawn();
-
         Debug.Log("Finished created " + count + " entities" +"\nLogs:\n" + _logs.ToString());
     }
 
-    public void SpawnViaPrebuiltGameObjects(float scale, bool removePhysics = false)
+    void TargetHit(float3 position)
     {
-        var gameObject = Resources.Load<UnityEngine.GameObject>("ConvertGOToEntity");
-        gameObject.transform.localScale = new Vector3(scale,scale,scale);
+        if (zoomedForVertices)
+            GameObject.Instantiate(hitsSmall[_rand.NextInt(0, hitsSmall.Length)], position, quaternion.identity);
+        else
+            GameObject.Instantiate(hitsLarge[_rand.NextInt(0, hitsLarge.Length)],position, quaternion.identity);
+    }
 
-        Entity sourceEntity = GameObjectConversionUtility.ConvertGameObjectHierarchy(gameObject, _initialWorld);
+    void SpawnViaPrebuiltGameObjects(float scale, bool removePhysics = false)
+    {
+        GameObject gameObject;
+
+        if (ECSItemsToSpawn.Length == 0)
+        {
+            gameObject = Resources.Load<UnityEngine.GameObject>("ConvertGOToEntity");
+        }
+        else
+        {
+            Debug.Log("Using ECSItemToSpawn");
+            gameObject = ECSItemsToSpawn[_rand.NextInt(0, ECSItemsToSpawn.Length)];
+        }
+
+        gameObject.transform.localScale = new Vector3(scale, scale, scale);
+        var sourceEntity = GameObjectConversionUtility.ConvertGameObjectHierarchy(gameObject, _initialWorld);
 
         for (int i = 0; i < count; i++)
         {
             var entity = _entityManager.Instantiate(sourceEntity);
             
             var pos = RandFloat3ToX(50, 100, -25);
-
-            _entityManager.AddComponentData(entity, new PositionComponent { position = pos, origionalPosition = pos });
             _entityManager.SetComponentData(entity, new Translation { Value = pos }); //Too many in the center breaks things. new float3(100,50,-25) }); //Spawn them in the center
-
-            //var localScale = _entityManager.GetComponentData<NonUniformScale>(entity);
-            //localScale.Value = new float3(scale, scale, scale);
-            //_entityManager.SetComponentData(entity, localScale);
+            _entityManager.AddComponentData(entity, new PositionComponent { position = pos, origionalPosition = pos, active = true });
 
             if (removePhysics)
             {
@@ -80,21 +97,70 @@ public class Spawner : UnityEngine.MonoBehaviour
         }
     }
 
-    public void Spawn()
+    public void SpawnWithNoPhysics(int newCount)
     {
-        var gravitateToTargetSystem = World.Active.GetOrCreateSystem<GravitateToTargetSystem>();
-        gravitateToTargetSystem.SetExplosionMultiplier(200,100);
-
-        //SpawnViaArcheTypesAndConstruct();
-
-        SpawnViaPrebuiltGameObjects(_defaultSize);
+        count = newCount;
+        SpawnWithPhysics(false);
     }
 
-    public void SetLightDirection()
+    public void Spawn()
+    {
+        SpawnWithPhysics(true);
+    }
+
+    void SpawnWithPhysics(bool physicsEnabled)
+    {
+        ECSHelper.EnableSystem<PositionWiggleSystem>(true);
+        StartCoroutine(SpawnInternal(physicsEnabled));
+    }
+
+    IEnumerator SpawnInternal(bool physicsEnabled)
+    {
+        zoomedForVertices = false;
+        Debug.Log("SpawnInternal Fired");
+        var gravitateToTargetSystem = World.Active.GetOrCreateSystem<GravitateToTargetSystem>();
+        gravitateToTargetSystem.SetPhysicsScales(70,0.5f,20,30);
+
+        //Not bothering constructing complex objects with ECS via code yet
+        //SpawnViaArcheTypesAndConstruct();
+
+
+        //Left all of this commented out on purpose, it seems because I was not calling jobHandle.Complete in GravitateToTargetSystem, 
+        //changing the entity list while that job is running seems to break things for ECS as we try to add our objects.  Avoiding this issue for now by putting in a .complete wait
+        //gravitateToTargetSystem.Enabled = false;
+        Debug.Log("SpawnInternal Waiting for a frame framecount:" + Time.frameCount);
+        //yield return new WaitForFixedUpdate();
+        //yield return new WaitForFixedUpdate();
+        //yield return new WaitForFixedUpdate();
+        //yield return new WaitForSeconds(0.1f); //Wait a frame so that ECS can do it its thing? Otherwise the new entities created while GravitateToTargetSystem is running, are not displayed.
+        Debug.Log("SpawnInternal After Wait framecount:" + Time.frameCount);
+        //SpawnViaPrebuiltGameObjects(DefaultScale);
+        //yield return new WaitForFixedUpdate();
+        //yield return new WaitForFixedUpdate();
+        //yield return new WaitForFixedUpdate();
+        //yield return new WaitForSeconds(0.1f); //Wait a frame so that ECS can do it its thing? Otherwise the new entities created while GravitateToTargetSystem is running, are not displayed.
+        // gravitateToTargetSystem.Enabled = true;
+
+
+
+        SpawnViaPrebuiltGameObjects(DefaultScale);
+        //Debug.Log("SpawnInternal Done:" + Time.frameCount);
+
+        yield break;
+    }
+
+    public void SetLightDirection(bool forward)
     {
         var light = GameObject.Find("Directional Light");
         light.transform.position = Camera.main.transform.position;
-        light.transform.rotation = Quaternion.Euler(Vector3.right * 120);
+        if (forward)
+        {
+            light.transform.rotation = Quaternion.Euler(Vector3.right * 60);
+        }
+        else
+        {
+            light.transform.rotation = Quaternion.Euler(Vector3.right * 120);
+        }
     }
 
     public void Clear()
@@ -109,13 +175,14 @@ public class Spawner : UnityEngine.MonoBehaviour
         Camera.main.transform.position = cameraTransform.position;
         Camera.main.transform.rotation = cameraTransform.rotation;
         
-        SetLightDirection();
+        SetLightDirection(true);
         counter = 0;
         count = 100;
     }
 
-    public void SpawnInSkin(bool useLerp)
+    public void SpawnWithVertices(bool useLerp)
     {
+        zoomedForVertices = true;
         Clear();
         var verticesCopysystem = World.Active.GetOrCreateSystem<VerticesCopySystem>();
         verticesCopysystem.SetVertices(SkinToDrawWithItems,UnityEngine.Animations.Axis.None,0);
@@ -123,16 +190,16 @@ public class Spawner : UnityEngine.MonoBehaviour
         count = verticesCopysystem.GetPointsCount();
 
         var gravitateToTargetSystem = World.Active.GetOrCreateSystem<GravitateToTargetSystem>();
-        gravitateToTargetSystem.SetExplosionMultiplier(50, 75);
+        gravitateToTargetSystem.SetPhysicsScales(75, 2f, 3,15);
 
         if (useLerp)
-            SpawnViaPrebuiltGameObjects(_skinSize, true);
+            SpawnViaPrebuiltGameObjects(SkinRendererScale, true);
         else
-            SpawnViaPrebuiltGameObjects(_skinSize);
+            SpawnViaPrebuiltGameObjects(SkinRendererScale);
 
         Camera.main.transform.position = cameraTransformSkinned.position;
         Camera.main.transform.rotation = cameraTransformSkinned.rotation;
-        SetLightDirection();
+        SetLightDirection(false);
 
         ECSHelper.EnableSystem<PositionWiggleSystem>(false);
         ECSHelper.EnableSystem<LerpPositionSystem>(useLerp);
@@ -163,25 +230,6 @@ public class Spawner : UnityEngine.MonoBehaviour
         //    return;
     }
 
-    //Hack to do the same thing that a job does in a script
-    void SetInPositionListWithoutECS(NativeArray<float3> positions)
-    {
-        var queryResponse = _entityManager.CreateEntityQuery(new ComponentType[] { typeof(PositionComponent), typeof(Translation) });
-        var positionComponents = queryResponse.ToComponentDataArray<PositionComponent>(Allocator.TempJob);
-        var translations = queryResponse.ToComponentDataArray<Translation>(Allocator.TempJob);
-        var entities = queryResponse.ToEntityArray(Allocator.TempJob);
-
-        for (int i = 0; i < positionComponents.Length; i++)
-        {
-            _entityManager.SetComponentData(entities[i], new Translation { Value = positions[i] });
-        }
-
-        entities.Dispose();
-        queryResponse.Dispose();
-        positionComponents.Dispose();
-        translations.Dispose();
-    }
-
     void SetupWorld()
     {
         var floorArcheType = _entityManager.CreateArchetype(
@@ -199,6 +247,9 @@ public class Spawner : UnityEngine.MonoBehaviour
         _entityManager.SetSharedComponentData(floorEntity, new RenderMesh() { mesh = FloorMesh, material = FloorMaterial });
     }
 
+    /// <summary>
+    /// Reset all back to original grid of random positions
+    /// </summary>
     public void ResetPositions()
     {
         var queryResponse = _entityManager.CreateEntityQuery(new ComponentType[] { typeof(PositionComponent) });
@@ -208,7 +259,7 @@ public class Spawner : UnityEngine.MonoBehaviour
         for (int i = 0; i < positionComponents.Length;i++)
         {
             var pos = RandFloat3ToX(50, 100, -25);
-            _entityManager.SetComponentData(entities[i], new PositionComponent { position = pos, origionalPosition = pos });
+            _entityManager.SetComponentData(entities[i], new PositionComponent { position = pos, origionalPosition = pos, active = true });
         }
 
         entities.Dispose();
@@ -216,11 +267,21 @@ public class Spawner : UnityEngine.MonoBehaviour
         positionComponents.Dispose(); 
     }
 
+    /// <summary>
+    /// Generate a random float3
+    /// </summary>
+    /// <param name="xOffSet"></param>
+    /// <param name="max"></param>
+    /// <param name="zOffSet"></param>
+    /// <returns></returns>
     float3 RandFloat3ToX(float xOffSet, float max, float zOffSet)
     {
         return _rand.NextFloat3(new float3(xOffSet, 0, zOffSet), new float3(max + xOffSet, max, max + zOffSet));
     }
 
+    /// <summary>
+    /// Create entities without the need for game objects. Construct it purely with ECS Components
+    /// </summary>
     void SpawnViaArcheTypesAndConstruct()
     {
         var archeType = _entityManager.CreateArchetype(
@@ -228,7 +289,11 @@ public class Spawner : UnityEngine.MonoBehaviour
             typeof(LocalToWorld),
             typeof(Translation),
             typeof(Rotation),
-            typeof(RenderMesh)
+            typeof(RenderMesh),
+            typeof(PhysicsVelocity),
+            typeof(PhysicsDamping),
+            typeof(PhysicsMass),
+            typeof(PhysicsCollider)
         );
 
         for (int i = 0; i < count; i++)
@@ -244,25 +309,45 @@ public class Spawner : UnityEngine.MonoBehaviour
 
             var physicsCollider = new PhysicsCollider { Value = collider };
             var pos = RandFloat3ToX(-50, 100, 0);
-            _entityManager.SetComponentData(entity, new PositionComponent { position = pos, origionalPosition = pos });
-            _entityManager.AddComponentData(entity, physicsCollider);
-            _entityManager.AddComponentData(entity, new PhysicsVelocity()
-            {
-                Linear = float3.zero,
-                Angular = float3.zero
-            });
+            _entityManager.SetComponentData(entity, new PositionComponent { position = pos, origionalPosition = pos, active = true });
+            _entityManager.SetComponentData(entity, physicsCollider);
 
-            //var mass = 1.0f;
-            ////Unity.Physics.Collider* colliderPtr = (Unity.Physics.Collider*)collider.GetUnsafePtr();
-            //_entityManager.AddComponentData(butterFlyEntity, new PhysicsMass() { PhysicsMass.CreateDynamic(colliderPtr->MassProperties, mass));// colliderPtr->MassProperties, mass));
+            //_entityManager.SetComponentData(entity, new PhysicsVelocity()
+            //{
+            //    Linear = float3.zero,
+            //    Angular = float3.zero
+            //});
 
-            _entityManager.AddComponentData(entity, new PhysicsDamping()
-            {
-                Linear = 0.01f,
-                Angular = 0.05f
-            });
+            ////var mass = 1.0f;
+            //////Unity.Physics.Collider* colliderPtr = (Unity.Physics.Collider*)collider.GetUnsafePtr();
+            ////_entityManager.AddComponentData(butterFlyEntity, new PhysicsMass() { PhysicsMass.CreateDynamic(colliderPtr->MassProperties, mass));// colliderPtr->MassProperties, mass));
+
+            //_entityManager.SetComponentData(entity, new PhysicsDamping()
+            //{
+            //    Linear = 0.01f,
+            //    Angular = 0.05f
+            //});
 
             _logs.AppendLine("Instantiated a butterFlyEntity in the entityManager.");
+        }
+
+        //Code to do the same thing that a job does in a script, can run this anywhere in Unity too, should work in CoRoutines
+        void SetInPositionListWithoutECS(NativeArray<float3> positions)
+        {
+            var queryResponse = _entityManager.CreateEntityQuery(new ComponentType[] { typeof(PositionComponent), typeof(Translation) });
+            var positionComponents = queryResponse.ToComponentDataArray<PositionComponent>(Allocator.TempJob);
+            var translations = queryResponse.ToComponentDataArray<Translation>(Allocator.TempJob);
+            var entities = queryResponse.ToEntityArray(Allocator.TempJob);
+
+            for (int i = 0; i < positionComponents.Length; i++)
+            {
+                _entityManager.SetComponentData(entities[i], new Translation { Value = positions[i] });
+            }
+
+            entities.Dispose();
+            queryResponse.Dispose();
+            positionComponents.Dispose();
+            translations.Dispose();
         }
     }
 }

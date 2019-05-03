@@ -10,5 +10,6 @@ public struct PositionComponent : IComponentData
 {
     public float3 position;
     public float3 origionalPosition;
+    public bool active;
 }
 

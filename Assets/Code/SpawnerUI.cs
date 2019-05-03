@@ -7,13 +7,15 @@ using Assets.Code;
 public class SpawnerUI : MonoBehaviour
 {
     public Button spawnButton, toggleGravityButton, clearButton, resetButton, skinPhysicsButton, skinLerpButton;
-    public Text counterText;
+    public Text counterText,scaleText;
+    public Slider scaleSlider;
     public GameObject character;
     Spawner _spawner;
     
     public void SpawnMore ()
     {
         _spawner.count = 100;
+        _spawner.DefaultScale = scaleSlider.value;
         _spawner.Spawn();
     }
 
@@ -29,34 +31,35 @@ public class SpawnerUI : MonoBehaviour
         skinPhysicsButton.onClick.AddListener(SpawnSkinPhysics);
         skinLerpButton.onClick.AddListener(SpawnSkinLerp);
 
-        _spawner.SetLightDirection();
+        _spawner.SetLightDirection(true);
 
         character.SetActive(false);
     }
 
     void EnableButtons(bool spawnButtonEnabled = true, bool toggleGravityButtonEnabled = true, bool resetbuttonEnabled = true, bool clearButtonEnabled = true, bool spawnInSkinButtonEnabled = true, bool skinLerpButtonEnabled = true)
     {
-        spawnButton.enabled = spawnButtonEnabled;
-        toggleGravityButton.enabled = toggleGravityButtonEnabled;
-        resetButton.enabled = resetbuttonEnabled;
-        clearButton.enabled = clearButtonEnabled;
-        skinPhysicsButton.enabled = spawnInSkinButtonEnabled;
-        skinLerpButton.enabled = skinLerpButtonEnabled;
+        spawnButton.interactable = spawnButtonEnabled;
+        toggleGravityButton.interactable = toggleGravityButtonEnabled;
+        resetButton.interactable = resetbuttonEnabled;
+        clearButton.interactable = clearButtonEnabled;
+        skinPhysicsButton.interactable = spawnInSkinButtonEnabled;
+        skinLerpButton.interactable = skinLerpButtonEnabled;
     }
 
     void SpawnSkinLerp()
     {
         EnableButtons(spawnButtonEnabled: false, toggleGravityButtonEnabled: false, resetbuttonEnabled: false);
         character.SetActive(true);
-        _spawner.SpawnInSkin(true);
+        _spawner.SkinRendererScale = scaleSlider.value / 10.0f;
+        _spawner.SpawnWithVertices(true);
     }
 
     void SpawnSkinPhysics()
     {
         EnableButtons(spawnButtonEnabled: false, resetbuttonEnabled: false);
         character.SetActive(true);
-
-        _spawner.SpawnInSkin(false);
+        _spawner.SkinRendererScale = scaleSlider.value / 10.0f;
+        _spawner.SpawnWithVertices(false);
     }
 
     void Clear()
@@ -109,6 +112,7 @@ public class SpawnerUI : MonoBehaviour
     void Update()
     {
         counterText.text = _spawner.counter.ToString();
+        scaleText.text = scaleSlider.value.ToString("0.##");
     }
 
 
